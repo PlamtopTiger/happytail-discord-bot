@@ -10,6 +10,7 @@ import re
 from datetime import date, datetime
 from typing import Iterable
 
+import httplib2
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -162,7 +163,8 @@ class SheetsClient:
         self.sheet_live_id = sheet_live_id
         self.sheet_event_id = sheet_event_id
         creds = _load_credentials(credentials_path)
-        self.service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+        http = creds.authorize(httplib2.Http(disable_ssl_certificate_validation=True))
+        self.service = build("sheets", "v4", http=http, cache_discovery=False)
         logger.info("SheetsClient initialized")
 
     # ==================== INTERNAL ====================
