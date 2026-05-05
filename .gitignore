@@ -1,0 +1,12 @@
+.env
+credentials.json
+*.json
+!.env.example
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.venv/
+venv/
+.vscode/
+.idea/
