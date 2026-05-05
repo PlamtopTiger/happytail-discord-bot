@@ -5,6 +5,7 @@ Wrapper สำหรับ Google Sheets API — ดึงข้อมูล liv
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import date, datetime
 from typing import Iterable
@@ -132,15 +133,35 @@ def merge_consecutive_lives(lives: list[dict]) -> list[dict]:
     return result
 
 
+def _load_credentials(credentials_path: str) -> Credentials:
+    """Load credentials from env vars (routine) or file (local dev)."""
+    private_key = os.getenv("GOOGLE_PRIVATE_KEY", "")
+    if private_key:
+        info = {
+            "type": "service_account",
+            "project_id": os.getenv("GOOGLE_PROJECT_ID", "happytail-bot"),
+            "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID", ""),
+            "private_key": private_key.replace("\\n", "\n"),
+            "client_email": os.getenv("GOOGLE_CLIENT_EMAIL", ""),
+            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "universe_domain": "googleapis.com",
+        }
+        logger.info("SheetsClient: loading credentials from env vars")
+        return Credentials.from_service_account_info(info, scopes=SCOPES)
+    logger.info("SheetsClient: loading credentials from file: %s", credentials_path)
+    return Credentials.from_service_account_file(credentials_path, scopes=SCOPES)
+
+
 class SheetsClient:
     """Wrapper สำหรับ Google Sheets API"""
 
     def __init__(self, credentials_path: str, sheet_live_id: str, sheet_event_id: str):
         self.sheet_live_id = sheet_live_id
         self.sheet_event_id = sheet_event_id
-        creds = Credentials.from_service_account_file(
-            credentials_path, scopes=SCOPES
-        )
+        creds = _load_credentials(credentials_path)
         self.service = build("sheets", "v4", credentials=creds, cache_discovery=False)
         logger.info("SheetsClient initialized")
 
