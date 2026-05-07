@@ -12,19 +12,28 @@ import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app_client import AppClient
 from formatter import embed_event_tomorrow, embed_live_today
 from sheets_client import SheetsClient
 
 logger = logging.getLogger(__name__)
 
+# Categories ที่ Discord bot สนใจ (event notify เฉพาะแฟนคลับ)
+EVENT_CATEGORIES = ["งานแสดง", "งานโปรโมท"]
+
 
 class NotifyScheduler:
-    """Auto-notify scheduler — โพสต์ลง channel ที่กำหนด"""
+    """Auto-notify scheduler — โพสต์ลง channel ที่กำหนด
+
+    - Live data: ใช้ SheetsClient (ตามเดิม)
+    - Event data: ใช้ AppClient (HAPPYTAIL App API)
+    """
 
     def __init__(
         self,
         bot: discord.Client,
         sheets: SheetsClient,
+        app: AppClient,
         channel_id: int,
         timezone: str = "Asia/Bangkok",
         live_time: str = "18:00",
@@ -33,6 +42,7 @@ class NotifyScheduler:
     ):
         self.bot = bot
         self.sheets = sheets
+        self.app = app
         self.channel_id = channel_id
         self.tz = pytz.timezone(timezone)
         self.live_time = live_time
@@ -111,7 +121,7 @@ class NotifyScheduler:
     async def _notify_event_morning(self) -> None:
         try:
             tomorrow = self._today() + timedelta(days=1)
-            events = self.sheets.get_events_for_dates([tomorrow])
+            events = self.app.get_events_for_date(tomorrow, categories=EVENT_CATEGORIES)
             if not events:
                 logger.info("No event tomorrow — skip notify")
                 return

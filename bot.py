@@ -13,6 +13,7 @@ import sys
 import discord
 from dotenv import load_dotenv
 
+from app_client import AppClient
 from scheduler import NotifyScheduler
 from sheets_client import SheetsClient
 
@@ -36,6 +37,8 @@ TIMEZONE = os.getenv("TIMEZONE", "Asia/Bangkok").strip()
 NOTIFY_LIVE_TIME = os.getenv("NOTIFY_LIVE_TIME", "18:00").strip()
 NOTIFY_EVENT_TIME = os.getenv("NOTIFY_EVENT_TIME", "12:00").strip()
 MENTION_ROLE_ID_RAW = os.getenv("MENTION_ROLE_ID", "").strip()
+HAPPYTAIL_API_URL = os.getenv("HAPPYTAIL_API_URL", "").strip()
+HAPPYTAIL_API_TOKEN = os.getenv("HAPPYTAIL_API_TOKEN", "").strip()
 
 
 def _validate_env() -> int:
@@ -51,6 +54,10 @@ def _validate_env() -> int:
         missing.append("SHEET_EVENT_ID")
     if not os.path.isfile(GOOGLE_CREDENTIALS_PATH):
         missing.append(f"GOOGLE_CREDENTIALS_PATH (file not found: {GOOGLE_CREDENTIALS_PATH})")
+    if not HAPPYTAIL_API_URL:
+        missing.append("HAPPYTAIL_API_URL")
+    if not HAPPYTAIL_API_TOKEN:
+        missing.append("HAPPYTAIL_API_TOKEN")
 
     if missing:
         logger.error("Missing env: %s", ", ".join(missing))
@@ -89,10 +96,15 @@ def main():
         sheet_live_id=SHEET_LIVE_ID,
         sheet_event_id=SHEET_EVENT_ID,
     )
+    app = AppClient(
+        base_url=HAPPYTAIL_API_URL,
+        token=HAPPYTAIL_API_TOKEN,
+    )
     mention_role_id = int(MENTION_ROLE_ID_RAW) if MENTION_ROLE_ID_RAW.isdigit() else None
     scheduler = NotifyScheduler(
         bot=client,
         sheets=sheets,
+        app=app,
         channel_id=channel_id,
         timezone=TIMEZONE,
         live_time=NOTIFY_LIVE_TIME,

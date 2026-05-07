@@ -25,8 +25,11 @@ import discord
 import pytz
 from dotenv import load_dotenv
 
+from app_client import AppClient
 from formatter import embed_event_tomorrow, embed_live_today
 from sheets_client import SheetsClient
+
+EVENT_CATEGORIES = ["งานแสดง", "งานโปรโมท"]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("sim")
@@ -40,6 +43,8 @@ GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "./credentials.js
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Bangkok").strip()
 TEST_ROLE_ID_RAW = os.getenv("TEST_ROLE_ID", "").strip()
 TEST_ROLE_ID = int(TEST_ROLE_ID_RAW) if TEST_ROLE_ID_RAW.isdigit() else None
+HAPPYTAIL_API_URL = os.getenv("HAPPYTAIL_API_URL", "").strip()
+HAPPYTAIL_API_TOKEN = os.getenv("HAPPYTAIL_API_TOKEN", "").strip()
 
 
 async def run_sim(live_date: date, event_tomorrow: date, mode: str = "both"):
@@ -47,6 +52,10 @@ async def run_sim(live_date: date, event_tomorrow: date, mode: str = "both"):
         credentials_path=GOOGLE_CREDENTIALS_PATH,
         sheet_live_id=SHEET_LIVE_ID,
         sheet_event_id=SHEET_EVENT_ID,
+    )
+    app = AppClient(
+        base_url=HAPPYTAIL_API_URL,
+        token=HAPPYTAIL_API_TOKEN,
     )
 
     intents = discord.Intents.default()
@@ -63,7 +72,7 @@ async def run_sim(live_date: date, event_tomorrow: date, mode: str = "both"):
 
             # ==================== EVENT (12:00) ====================
             if mode in ("event", "both"):
-                events = sheets.get_events_for_dates([event_tomorrow])
+                events = app.get_events_for_date(event_tomorrow, categories=EVENT_CATEGORIES)
                 if events:
                     embed = embed_event_tomorrow(events, event_tomorrow)
                     kwargs = {"embed": embed, "allowed_mentions": allowed}

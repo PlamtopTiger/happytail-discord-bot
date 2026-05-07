@@ -17,8 +17,11 @@ import discord
 import pytz
 from dotenv import load_dotenv
 
+from app_client import AppClient
 from formatter import EMBED_COLOR, thai_date
 from sheets_client import SheetsClient
+
+EVENT_CATEGORIES = ["งานแสดง", "งานโปรโมท"]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("preview")
@@ -32,6 +35,8 @@ GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "./credentials.js
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Bangkok").strip()
 TEST_ROLE_ID_RAW = os.getenv("TEST_ROLE_ID", "").strip()
 TEST_ROLE_ID = int(TEST_ROLE_ID_RAW) if TEST_ROLE_ID_RAW.isdigit() else None
+HAPPYTAIL_API_URL = os.getenv("HAPPYTAIL_API_URL", "").strip()
+HAPPYTAIL_API_TOKEN = os.getenv("HAPPYTAIL_API_TOKEN", "").strip()
 
 DAYS = 14
 
@@ -71,6 +76,10 @@ async def run_preview():
         credentials_path=GOOGLE_CREDENTIALS_PATH,
         sheet_live_id=SHEET_LIVE_ID,
         sheet_event_id=SHEET_EVENT_ID,
+    )
+    app = AppClient(
+        base_url=HAPPYTAIL_API_URL,
+        token=HAPPYTAIL_API_TOKEN,
     )
 
     intents = discord.Intents.default()
@@ -133,7 +142,7 @@ async def run_preview():
             for i in range(DAYS):
                 check_date = today + timedelta(days=i)        # วันที่เช็ค (12:00 ของวันนี้)
                 tomorrow = check_date + timedelta(days=1)     # งานพรุ่งนี้
-                events = sheets.get_events_for_dates([tomorrow])
+                events = app.get_events_for_date(tomorrow, categories=EVENT_CATEGORIES)
                 if events:
                     event_count_total += len(events)
                     event_send_days += 1
