@@ -1,11 +1,14 @@
 """
-cleanup_today.py — ลบ message ของบอทที่โพสต์ "วันนี้" (Asia/Bangkok)
-รัน 23:30 BKK ทุกวัน เพื่อให้ channel สะอาดก่อนวันถัดไป
+cleanup_today.py — ลบ message ของบอทที่โพสต์ใน 7 วันย้อนหลัง (Asia/Bangkok)
+รัน 23:30 BKK ทุกวัน เพื่อให้ channel สะอาด
+
+Window: [today - 7 days 00:00 BKK, tomorrow 00:00 BKK)
+เหตุผล: ถ้า cleanup วันไหน fail ไม่ทัน, รอบถัดไปยังตามเก็บได้
 
 Logic:
   1. Login Discord ด้วย BOT_TOKEN
   2. Fetch channel จาก CHANNEL_ID
-  3. List messages ที่ created_at อยู่ใน "วันนี้" (BKK) และ author = bot
+  3. List messages ที่ created_at อยู่ในช่วง 7 วันย้อนหลัง และ author = bot
   4. Skip pinned messages
   5. Delete + log
 
@@ -33,8 +36,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0").strip() or "0")
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Bangkok").strip()
 
-# Discord history limit ที่จะ scan ต่อรอบ (พอสำหรับ 1 วัน — bot ส่งไม่กี่ข้อความ)
-HISTORY_LIMIT = 200
+# Discord history limit ที่จะ scan ต่อรอบ (รองรับ 7 วัน × bot ส่งวันละไม่กี่ข้อความ + buffer)
+HISTORY_LIMIT = 500
+CLEANUP_LOOKBACK_DAYS = 7
 
 
 async def run_cleanup(dry_run: bool = False) -> None:
@@ -45,9 +49,10 @@ async def run_cleanup(dry_run: bool = False) -> None:
     tz = pytz.timezone(TIMEZONE)
     now_local = datetime.now(tz)
     today_local = now_local.date()
-    # ขอบเขต "วันนี้" ใน local tz → แปลงเป็น UTC (discord.Message.created_at เป็น UTC aware)
-    start_local = tz.localize(datetime.combine(today_local, time.min))
-    end_local = start_local + timedelta(days=1)
+    # Window: 7 วันย้อนหลัง → สิ้นสุดวันนี้ (BKK) → แปลงเป็น UTC
+    today_midnight_local = tz.localize(datetime.combine(today_local, time.min))
+    start_local = today_midnight_local - timedelta(days=CLEANUP_LOOKBACK_DAYS)
+    end_local = today_midnight_local + timedelta(days=1)
     start_utc = start_local.astimezone(pytz.UTC)
     end_utc = end_local.astimezone(pytz.UTC)
 
