@@ -13,8 +13,10 @@ Logic:
   5. Delete + log
 
 Usage:
-  python cleanup_today.py            # ลบจริง
-  python cleanup_today.py --dry-run  # แค่ list ไม่ลบ
+  python cleanup_today.py                              # ลบจริง (default: 7 days, history 500)
+  python cleanup_today.py --dry-run                    # แค่ list ไม่ลบ
+  python cleanup_today.py --days 365 --history-limit 2000           # ad-hoc purge (override lookback + scan size)
+  python cleanup_today.py --days 365 --history-limit 2000 --dry-run # preview ก่อน purge
 """
 from __future__ import annotations
 
@@ -41,7 +43,11 @@ HISTORY_LIMIT = 500
 CLEANUP_LOOKBACK_DAYS = 7
 
 
-async def run_cleanup(dry_run: bool = False) -> None:
+async def run_cleanup(
+    dry_run: bool = False,
+    lookback_days: int = CLEANUP_LOOKBACK_DAYS,
+    history_limit: int = HISTORY_LIMIT,
+) -> None:
     if not BOT_TOKEN or not CHANNEL_ID:
         log.error("Missing BOT_TOKEN or CHANNEL_ID in .env")
         return
@@ -49,18 +55,20 @@ async def run_cleanup(dry_run: bool = False) -> None:
     tz = pytz.timezone(TIMEZONE)
     now_local = datetime.now(tz)
     today_local = now_local.date()
-    # Window: 7 วันย้อนหลัง → สิ้นสุดวันนี้ (BKK) → แปลงเป็น UTC
+    # Window: lookback_days วันย้อนหลัง → สิ้นสุดวันนี้ (BKK) → แปลงเป็น UTC
     today_midnight_local = tz.localize(datetime.combine(today_local, time.min))
-    start_local = today_midnight_local - timedelta(days=CLEANUP_LOOKBACK_DAYS)
+    start_local = today_midnight_local - timedelta(days=lookback_days)
     end_local = today_midnight_local + timedelta(days=1)
     start_utc = start_local.astimezone(pytz.UTC)
     end_utc = end_local.astimezone(pytz.UTC)
 
     log.info(
-        "Cleanup window: %s → %s (%s) | dry_run=%s",
+        "Cleanup window: %s → %s (%s) | lookback_days=%d history_limit=%d dry_run=%s",
         start_local.isoformat(timespec="seconds"),
         end_local.isoformat(timespec="seconds"),
         TIMEZONE,
+        lookback_days,
+        history_limit,
         dry_run,
     )
 
@@ -80,7 +88,7 @@ async def run_cleanup(dry_run: bool = False) -> None:
             failures = 0
 
             # history(after=...) ดึงเฉพาะ msg หลัง start_utc ก็พอ
-            async for msg in channel.history(limit=HISTORY_LIMIT, after=start_utc, oldest_first=False):
+            async for msg in channel.history(limit=history_limit, after=start_utc, oldest_first=False):
                 scanned += 1
                 # ป้องกัน edge case: ข้ามถ้าหลุดกรอบวันนี้
                 if msg.created_at < start_utc or msg.created_at >= end_utc:
@@ -128,5 +136,23 @@ async def run_cleanup(dry_run: bool = False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="list only, do not delete")
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=CLEANUP_LOOKBACK_DAYS,
+        help=f"lookback window in days (default: {CLEANUP_LOOKBACK_DAYS})",
+    )
+    parser.add_argument(
+        "--history-limit",
+        type=int,
+        default=HISTORY_LIMIT,
+        help=f"max messages to scan per run (default: {HISTORY_LIMIT})",
+    )
     args = parser.parse_args()
-    asyncio.run(run_cleanup(dry_run=args.dry_run))
+    asyncio.run(
+        run_cleanup(
+            dry_run=args.dry_run,
+            lookback_days=args.days,
+            history_limit=args.history_limit,
+        )
+    )
