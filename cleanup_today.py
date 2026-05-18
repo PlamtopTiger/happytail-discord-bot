@@ -24,6 +24,7 @@ import argparse
 import asyncio
 import logging
 import os
+import sys
 from datetime import datetime, time, timedelta
 
 import discord
@@ -42,15 +43,54 @@ TIMEZONE = os.getenv("TIMEZONE", "Asia/Bangkok").strip()
 HISTORY_LIMIT = 500
 CLEANUP_LOOKBACK_DAYS = 7
 
+# Retry tuning for transient Discord API failures (429, 5xx, network blips)
+DELETE_MAX_ATTEMPTS = 3
+DELETE_BACKOFF_SECONDS = (2.0, 4.0, 8.0)
+
+# Exit codes (consumed by the routine wrapper to decide retry behavior)
+EXIT_OK = 0
+EXIT_CONFIG_ERROR = 1
+EXIT_PARTIAL = 2
+
+
+async def _delete_with_retry(msg) -> bool:
+    """Delete a Discord message with bounded retry on transient errors.
+
+    Returns True if the message is gone after the call (deleted now or already missing),
+    False if every attempt failed.
+    """
+    for attempt in range(DELETE_MAX_ATTEMPTS):
+        try:
+            await msg.delete()
+            return True
+        except discord.NotFound:
+            return True
+        except discord.Forbidden as e:
+            log.error("Permission denied deleting msg %s: %s", msg.id, e)
+            return False
+        except discord.HTTPException as e:
+            backoff = DELETE_BACKOFF_SECONDS[min(attempt, len(DELETE_BACKOFF_SECONDS) - 1)]
+            retry_after = getattr(e, "retry_after", None)
+            wait = max(backoff, float(retry_after)) if retry_after is not None else backoff
+            is_last = attempt + 1 >= DELETE_MAX_ATTEMPTS
+            if is_last:
+                log.error("Delete failed for msg %s after %d attempts: %s",
+                          msg.id, DELETE_MAX_ATTEMPTS, e)
+                return False
+            log.warning("Delete failed for msg %s (attempt %d/%d): %s — retry in %.1fs",
+                        msg.id, attempt + 1, DELETE_MAX_ATTEMPTS, e, wait)
+            await asyncio.sleep(wait)
+    return False
+
 
 async def run_cleanup(
     dry_run: bool = False,
     lookback_days: int = CLEANUP_LOOKBACK_DAYS,
     history_limit: int = HISTORY_LIMIT,
-) -> None:
+) -> int:
     if not BOT_TOKEN or not CHANNEL_ID:
         log.error("Missing BOT_TOKEN or CHANNEL_ID in .env")
-        return
+        return EXIT_CONFIG_ERROR
 
     tz = pytz.timezone(TIMEZONE)
     now_local = datetime.now(tz)
@@ -75,32 +115,36 @@ async def run_cleanup(
     intents = discord.Intents.default()
     client = discord.Client(intents=intents)
 
+    # Result state shared between the on_ready handler and the outer caller
+    result = {
+        "scanned": 0,
+        "matched": 0,
+        "deleted": 0,
+        "skipped_pin": 0,
+        "failures": 0,
+        "fatal_error": False,
+    }
+
     @client.event
     async def on_ready():
         try:
             log.info("Logged in as %s", client.user)
             channel = client.get_channel(CHANNEL_ID) or await client.fetch_channel(CHANNEL_ID)
 
-            scanned = 0
-            matched = 0
-            deleted = 0
-            skipped_pin = 0
-            failures = 0
-
             # history(after=...) ดึงเฉพาะ msg หลัง start_utc ก็พอ
             async for msg in channel.history(limit=history_limit, after=start_utc, oldest_first=False):
-                scanned += 1
+                result["scanned"] += 1
                 # ป้องกัน edge case: ข้ามถ้าหลุดกรอบวันนี้
                 if msg.created_at < start_utc or msg.created_at >= end_utc:
                     continue
                 if msg.author.id != client.user.id:
                     continue
                 if msg.pinned:
-                    skipped_pin += 1
+                    result["skipped_pin"] += 1
                     log.info("Skip pinned msg %s", msg.id)
                     continue
 
-                matched += 1
+                result["matched"] += 1
                 preview = (msg.content or "").replace("\n", " ")[:60]
                 if msg.embeds:
                     e0 = msg.embeds[0]
@@ -114,23 +158,36 @@ async def run_cleanup(
                 )
                 if dry_run:
                     continue
-                try:
-                    await msg.delete()
-                    deleted += 1
-                except discord.HTTPException as e:
-                    failures += 1
-                    log.warning("Delete failed for msg %s: %s", msg.id, e)
+                if await _delete_with_retry(msg):
+                    result["deleted"] += 1
+                else:
+                    result["failures"] += 1
 
             log.info(
                 "Done. scanned=%d matched=%d deleted=%d skipped_pin=%d failures=%d",
-                scanned, matched, deleted, skipped_pin, failures,
+                result["scanned"], result["matched"], result["deleted"],
+                result["skipped_pin"], result["failures"],
             )
         except Exception as e:
+            result["fatal_error"] = True
             log.exception("Cleanup failed: %s", e)
         finally:
             await client.close()
 
     await client.start(BOT_TOKEN)
+
+    if result["fatal_error"]:
+        return EXIT_PARTIAL
+    if dry_run:
+        return EXIT_OK
+    # Partial: matched some but failed to delete at least one
+    if result["matched"] > 0 and result["deleted"] < result["matched"]:
+        log.error(
+            "PARTIAL cleanup: deleted=%d of matched=%d (failures=%d)",
+            result["deleted"], result["matched"], result["failures"],
+        )
+        return EXIT_PARTIAL
+    return EXIT_OK
 
 
 if __name__ == "__main__":
@@ -149,10 +206,11 @@ if __name__ == "__main__":
         help=f"max messages to scan per run (default: {HISTORY_LIMIT})",
     )
     args = parser.parse_args()
-    asyncio.run(
+    exit_code = asyncio.run(
         run_cleanup(
             dry_run=args.dry_run,
             lookback_days=args.days,
             history_limit=args.history_limit,
         )
     )
+    sys.exit(exit_code or EXIT_OK)
