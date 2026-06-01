@@ -180,4 +180,10 @@ def _format_event_line(ev: dict, with_name_bold: bool = True) -> str:
         time_str = "—"
 
     name_fmt = f"**{name}**" if with_name_bold else name
-    return f"• {name_fmt}\n  เวลา: {time_str} | สถานที่: {location}"
+    line = f"• {name_fmt}\n  เวลา: {time_str} | สถานที่: {location}"
+
+    members = ev.get("members") or []
+    if members:
+        line += f"\n  Member: {', '.join(members)}"
+
+    return line
