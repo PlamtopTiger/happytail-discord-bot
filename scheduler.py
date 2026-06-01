@@ -19,7 +19,7 @@ from sheets_client import SheetsClient
 logger = logging.getLogger(__name__)
 
 # Categories ที่ Discord bot สนใจ (event notify เฉพาะแฟนคลับ)
-EVENT_CATEGORIES = ["งานแสดง", "งานโปรโมท"]
+EVENT_CATEGORIES = ["งานแสดง", "งานโปรโมท", "งานออนไลน์"]
 
 
 class NotifyScheduler:

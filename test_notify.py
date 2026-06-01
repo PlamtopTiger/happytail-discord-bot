@@ -23,7 +23,7 @@ from app_client import AppClient
 from formatter import embed_event_tomorrow, embed_live_today
 from sheets_client import SheetsClient
 
-EVENT_CATEGORIES = ["งานแสดง", "งานโปรโมท"]
+EVENT_CATEGORIES = ["งานแสดง", "งานโปรโมท", "งานออนไลน์"]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("test")

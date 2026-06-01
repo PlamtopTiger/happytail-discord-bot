@@ -27,7 +27,7 @@ ALLOWED_MEMBERS: set[str] = {
 }
 
 # Category whitelist (events)
-ALLOWED_CATEGORIES: set[str] = {"งานแสดง", "งานโปรโมท"}
+ALLOWED_CATEGORIES: set[str] = {"งานแสดง", "งานโปรโมท", "งานออนไลน์"}
 
 # Map เดือน (1-12) → ชื่อ tab ที่เป็นไปได้ใน sheet
 # Sheet ของพี่นัทมี ~11 tab รายเดือน — สคริปต์จะลอง match จากชื่อ tab จริง
