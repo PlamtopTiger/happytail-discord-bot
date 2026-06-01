@@ -21,7 +21,7 @@ from app_client import AppClient
 from formatter import EMBED_COLOR, thai_date
 from sheets_client import SheetsClient
 
-EVENT_CATEGORIES = ["งานแสดง", "งานโปรโมท", "งานออนไลน์"]
+EVENT_CATEGORIES = ["งานแสดง", "งานโปรโมท", "งานออนไลน์", "งานออฟไค"]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("preview")
