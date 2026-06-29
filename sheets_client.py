@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 # ========== CONSTANTS ==========
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
-# Member whitelist (ไลฟ์)
+# Member whitelist (ไลฟ์) — sync กับ dropdown ใน Sheet (member + trainee + ชื่อวง)
 ALLOWED_MEMBERS: set[str] = {
-    "Aiyumu", "Beebelle", "Bewji", "Fairy", "Karin", "Marchi", "Mumiu"
+    "Aiyumu", "Bewji", "Beebelle", "Karin", "Marchi",
+    "Ana", "Cutepid", "Maika", "Uta", "Zinzin",
+    "HAPPYTAIL",
 }
 
 # Category whitelist (events)
